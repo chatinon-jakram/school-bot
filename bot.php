@@ -1,14 +1,19 @@
-
 <?php
-// ปิดการแสดง Error เพื่อความสะอาดของ Log
-error_reporting(0);
-ini_set('display_errors', 0);
+// เปิดการแสดงผลหน้าเว็บเพื่อเช็คสถานะ (เหมาะสำหรับกดรันเอง)
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-// --- [ ตั้งค่าสำคัญ ] ---
+// --- [ 1. ตั้งค่าเชื่อมต่อ ] ---
+// ลิงก์ Google Apps Script ที่เอิร์กส่งมา (ใส่ให้แล้วครับ)
 $gas_url = "https://script.google.com/macros/s/AKfycbx5ue2dzjSFqCJ6gN-XJJOtL9j3ICMuifD5A6YDegj2oFsRRZrtzGrahPzNnVYEgxyZ/exec"; 
+
+// Webhook Discord ตัวล่าสุด
 $webhook_url = "https://discord.com/api/webhooks/1501520381826043946/TIa1l2i3REl96ZStVCpKi5xveJER2jowCGJHyQX_7NySc5jYk80pZUClFjrEpJP7N9Vd";
 
-// --- [ รายชื่อเพจทั้งหมด ] ---
+// เช็คโหมด Debug (ถ้าใส่ ?debug=true ต่อท้าย URL มันจะบังคับส่งทุกอัน)
+$is_debug = isset($_GET['debug']) && $_GET['debug'] == 'true';
+
+// --- [ 2. รายชื่อเพจ ] ---
 $rss_sources = [
     "งานประชาสัมพันธ์โรงเรียนนางรอง" => [
         "rss" => "https://rss.app/feeds/1TQl9fs4RGwFQO5u.xml",
@@ -62,12 +67,12 @@ $rss_sources = [
     ],
     "คณะกรรมการสภานักเรียนโรงเรียนนางรอง" => [
         "rss" => "https://rss.app/feeds/cdeTCXnSfyaJguza.xml",
-        "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/307475364_478915944282703_3356226624056089045_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=1d70fc&oh=00_Af766loH9oWJedrQSAzajyrz0bYHFycopqUSM2bqnYFs0A&oe=6A00AE08",
+        "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/307475364_478915944282703_3356226624056089045_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=1d70fc&oh=00_Af766loH9oWJedrQSAzajyrz0bYHFycopqUS)mdrQSAzajyrz0bYHFycopqUSM2bqnYFs0A&oe=6A00AE08",
         "color" => "ffffff"
     ],
 ];
 
-// --- [ ฟังก์ชันคุยกับ Google Sheets ] ---
+// --- [ 3. ฟังก์ชันคุยกับ Google Sheets ] ---
 function google_db($action, $key, $val = "") {
     global $gas_url;
     $ch = curl_init($gas_url);
@@ -80,27 +85,41 @@ function google_db($action, $key, $val = "") {
     return trim($res);
 }
 
-// --- [ เริ่มประมวลผล ] ---
+// --- [ 4. รายงานผลบนหน้าเว็บ ] ---
+echo "<h2>NR Bot Log Report</h2>";
+echo "<p>Status: " . ($is_debug ? "<b>DEBUG MODE (Forcing Send)</b>" : "Normal Mode") . "</p>";
+echo "<hr><pre>";
+
 foreach ($rss_sources as $source_name => $info) {
     $source_key = substr(md5($info['rss']), 0, 8);
     $rss = @simplexml_load_file($info['rss']);
     
-    if ($rss === false || !isset($rss->channel->item[0])) continue;
-
-    $item = $rss->channel->item[0];
-    $guid = (string)$item->guid;
-
-    // ดึงค่าล่าสุดจาก Google Sheets
-    $last_guid = google_db("get", $source_key);
-
-    // กรณีไม่มีข้อมูลเดิม (Initialize) ให้บันทึกไว้แล้วข้าม เพื่อไม่ให้ส่งซ้ำครั้งแรก
-    if (empty($last_guid)) {
-        google_db("set", $source_key, $guid);
-        echo "Init: $source_name | ";
+    if ($rss === false || !isset($rss->channel->item[0])) {
+        echo "❌ $source_name: RSS Error\n";
         continue;
     }
 
-    if ($guid !== $last_guid) {
+    $item = $rss->channel->item[0];
+    $guid = (string)$item->guid;
+    $last_guid = google_db("get", $source_key);
+
+    $should_send = false;
+    $log_msg = "";
+
+    if ($is_debug) {
+        $should_send = true;
+        $log_msg = "FORCE SEND (Debug)";
+    } elseif (empty($last_guid)) {
+        google_db("set", $source_key, $guid);
+        $log_msg = "INITIALIZED (Saved, No send)";
+    } elseif ($guid !== $last_guid) {
+        $should_send = true;
+        $log_msg = "NEW POST FOUND";
+    } else {
+        $log_msg = "ALREADY SENT (Skipped)";
+    }
+
+    if ($should_send) {
         $title = (string)$item->title;
         $link  = (string)$item->link;
         $desc  = strip_tags((string)$item->description);
@@ -118,12 +137,11 @@ foreach ($rss_sources as $source_name => $info) {
             "username" => $source_name,
             "avatar_url" => $info['avatar'],
             "embeds" => [[
-                "title" => "📌 " . ($title ?: "ข่าวประชาสัมพันธ์"),
-                "description" => mb_strimwidth($desc, 0, 300, "..."),
+                "title" => "📌 " . ($title ?: "ประชาสัมพันธ์"),
+                "description" => mb_strimwidth($desc, 0, 250, "..."),
                 "url" => $link,
                 "color" => hexdec($info['color']),
-                "footer" => ["text" => "โรงเรียนนางรอง Nangrong School | ประพฤติดี เรียนเด่น กีฬาดัง สร้างงานได้"],
-                "timestamp" => date('c'),
+                "footer" => ["text" => "NR RSS System | " . date("H:i:s")],
                 "image" => !empty($image_url) ? ["url" => $image_url] : null
             ]]
         ];
@@ -133,16 +151,16 @@ foreach ($rss_sources as $source_name => $info) {
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        
-        sleep(1); // หน่วงเวลา 1 วินาทีกัน Error 429
         curl_exec($ch);
         curl_close($ch);
 
-        // อัปเดต GUID ใหม่ลง Google Sheets
         google_db("set", $source_key, $guid);
-        echo "Sent: $source_name | ";
+        echo "✅ $source_name: $log_msg\n";
+    } else {
+        echo "⚪ $source_name: $log_msg\n";
     }
 }
-echo "Done: " . date("H:i:s");
+
+echo "</pre><hr>";
+echo "Finished: " . date("Y-m-d H:i:s");
 ?>
