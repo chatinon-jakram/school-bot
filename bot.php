@@ -1,9 +1,6 @@
 <?php
 // --- [ CONFIGURATION ] ---
-// 1. ใส่ URL จาก Google Apps Script ของเอิร์กที่นี่
 $gas_url = "https://script.google.com/macros/s/AKfycbx5ue2dzjSFqCJ6gN-XJJOtL9j3ICMuifD5A6YDegj2oFsRRZrtzGrahPzNnVYEgxyZ/exec"; 
-
-// 2. Webhook Discord (ตัวที่เอิร์กคัดลอกมาใหม่)
 $webhook_url = "https://discord.com/api/webhooks/1501520381826043946/TIa1l2i3REl96ZStVCpKi5xveJER2jowCGJHyQX_7NySc5jYk80pZUClFjrEpJP7N9Vd";
 
 // --- [ UI & STYLING ] ---
@@ -14,9 +11,9 @@ echo "<style>
     h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
     .toolbar { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 25px; }
     .btn { padding: 12px 25px; text-decoration: none; color: white; border-radius: 8px; font-weight: 600; transition: 0.3s; border: none; cursor: pointer; }
-    .btn-blue { background: #3498db; } .btn-blue:hover { background: #2980b9; }
-    .btn-red { background: #e74c3c; } .btn-red:hover { background: #c0392b; }
-    .btn-green { background: #2ecc71; } .btn-green:hover { background: #27ae60; }
+    .btn-blue { background: #3498db; }
+    .btn-red { background: #e74c3c; }
+    .btn-green { background: #2ecc71; }
     .log-container { background: #263238; color: #80cbc4; padding: 20px; border-radius: 10px; font-family: 'Courier New', Courier, monospace; font-size: 14px; overflow-x: auto; min-height: 200px; }
     .status-line { margin-bottom: 5px; border-bottom: 1px solid #37474f; padding-bottom: 5px; }
     .success { color: #afffaf; } .info { color: #81d4fa; } .warning { color: #fff59d; } .error { color: #ffab91; }
@@ -24,9 +21,9 @@ echo "<style>
 
 echo "<h1>🚀 ระบบกระจายข่าวโรงเรียนนางรอง</h1>";
 echo "<div class='toolbar'>";
-echo "<a href='?action=debug' class='btn btn-blue'>▶️ บังคับส่งทันที (Debug)</a>";
+echo "<a href='?action=debug' class='btn btn-blue'>▶️ บังคับส่งแบบ Embed (Debug)</a>";
 echo "<a href='?action=check' class='btn btn-red'>🔍 ตรวจสอบการเชื่อมต่อ</a>";
-echo "<a href='index.php' class='btn btn-green'>🔄 รันโหมดปกติ</a>";
+echo "<a href='bot.php' class='btn btn-green'>🔄 รันโหมดปกติ</a>";
 echo "</div><div class='log-container'>";
 
 // --- [ FUNCTIONS ] ---
@@ -120,7 +117,7 @@ if ($action == 'check') {
 
 } else {
     $is_debug = ($action == 'debug');
-    echo "<div class='status-line info'>[RUN] กำลังสแกนหาข่าวใหม่ (" . ($is_debug ? "โหมดบังคับส่ง" : "โหมดปกติ") . ")...</div>";
+    echo "<div class='status-line info'>[RUN] กำลังสแกนหาข่าวใหม่ (" . ($is_debug ? "โหมดบังคับส่งแบบ Embed" : "โหมดปกติ") . ")...</div>";
 
     foreach ($rss_sources as $name => $info) {
         $key = substr(md5($info['rss']), 0, 8);
@@ -157,23 +154,28 @@ if ($action == 'check') {
             $title = (string)$item->title;
             $link = (string)$item->link;
             $desc = strip_tags((string)$item->description);
+            
+            // ดึงรูปภาพ
             $image_url = "";
             $ns = $rss->getNamespaces(true);
             if (isset($ns['media'])) {
                 $media = $item->children($ns['media']);
-                if (isset($media->content)) { $image_url = (string)$media->content->attributes()->url; }
+                if (isset($media->content)) {
+                    $image_url = (string)$media->content->attributes()->url;
+                }
             }
 
+            // จัดทำ Payload สำหรับ Embed
             $payload = [
                 "username" => $name,
                 "avatar_url" => $info['avatar'],
                 "embeds" => [[
-                    "title" => "📌 " . ($title ?: "ข่าวสารโรงเรียนนางรอง"),
+                    "title" => "📌 " . ($title ?: "ข่าวใหม่จากโรงเรียน"),
                     "description" => mb_strimwidth($desc, 0, 250, "..."),
                     "url" => $link,
                     "color" => hexdec($info['color']),
-                    "image" => !empty($image_url) ? ["url" => $image_url] : null,
-                    "footer" => ["text" => "ระบบแจ้งข่าวอัตโนมัติ M.3/5 | " . date("H:i")]
+                    "footer" => ["text" => "ระบบแจ้งข่าวอัตโนมัติ M.3/5 | " . date("H:i")],
+                    "image" => !empty($image_url) ? ["url" => $image_url] : null
                 ]]
             ];
 
@@ -185,11 +187,11 @@ if ($action == 'check') {
             curl_close($ch);
 
             google_db("set", $key, $guid);
-            echo "<div class='status-line success'>✅ $name: $status_msg (Sent to Discord)</div>";
+            echo "<div class='status-line success'>✅ $name: $status_msg (Sent Embed)</div>";
         } else {
             echo "<div class='status-line warning'>⚪ $name: $status_msg</div>";
         }
-        usleep(500000); // กันโดนแบน
+        usleep(500000); 
     }
 }
 
