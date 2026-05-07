@@ -1,20 +1,18 @@
 <?php
 /**
  * NR RSS BOT - Version: The Ultimate Freedom (ร.ศ. 124)
- * แก้ไขปัญหาการเชื่อมต่อ FAIL, บอตเด้งรัว และคืนสิทธิ์ภาพ/ลิงก์ให้ Admin Ek
+ * FIXED: UI Navigation, Database Connection, and Anti-Spam
  */
 
-// ปิดการโชว์ Warning เพื่อความสะอาดของ Log
+// ปิดการโชว์ Warning
 error_reporting(E_ERROR | E_PARSE);
 date_default_timezone_set("Asia/Bangkok");
 
 // --- [ 1. CONFIGURATION ] ---
-// ลิงก์ใหม่ที่เอิร์กให้มา อัปเดตให้แล้วครับ
 $gas_url = "https://script.google.com/macros/s/AKfycbXXtpKmLqEY83CpbgEpE5pyN5_ATjP4E0bhhwc3QKB2f9spFeS5CxgiSyJNNf-Z14A/exec"; 
 $webhook_url = "https://discord.com/api/webhooks/1501520381826043946/TIa1l2i3REl96ZStVCpKi5xveJER2jowCGJHyQX_7NySc5jYk80pZUClFjrEpJP7N9Vd";
 
-$action = isset($_GET['action']) ? $_GET['action'] : null;
-$is_cron = ($action === null); 
+$action = isset($_GET['action']) ? $_GET['action'] : 'cron'; 
 
 // --- [ 2. CORE FUNCTIONS ] ---
 function google_db($act, $k, $v = "") {
@@ -36,7 +34,7 @@ function google_db($act, $k, $v = "") {
     return trim($res);
 }
 
-// --- [ 3. ALL RSS SOURCES (11 แหล่งข่าวจัดเต็ม) ] ---
+// --- [ 3. ALL RSS SOURCES (11 แหล่ง) ] ---
 $rss_sources = [
     "งานประชาสัมพันธ์โรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/1TQl9fs4RGwFQO5u.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/324269728_743603630069476_228333852253818672_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=53a332&oh=00_Af68PNKCTkk6MHN-q2yZ6qH0cO8WR188tpti4eFbXSTzZQ&oe=6A009594", "color" => "4ebc00"],
     "โรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/y2raHbpZnAJfIN0p.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/648873944_26574300548828725_2833658263750313445_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=53a332&oh=00_Af7yXti2unkb8AfMJUGQDRKv9NJyI29t4_660aoZZsk5Pg&oe=6A00A79B", "color" => "e28b00"],
@@ -51,32 +49,44 @@ $rss_sources = [
     "คณะกรรมการสภานักเรียนโรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/cdeTCXnSfyaJguza.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/307475364_478915944282703_3356226624056089045_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=1d70fc&oh=00_Af766loH9oWJedrQSAzajyrz0bYHFycopqUSM2bqnYFs0A&oe=6A00AE08", "color" => "ffffff"]
 ];
 
-// --- [ 4. EXECUTION LOGIC ] ---
-if ($action == 'view') {
-    // หน้า UI ควบคุม
+// --- [ 4. WEB INTERFACE ] ---
+if ($action === 'view' || $action === 'run' || $action === 'check') {
     echo "<!DOCTYPE html><html lang='th'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>NR Bot Control Panel</title>";
     echo "<style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; padding: 20px; color: #1c1e21; }
         .container { max-width: 800px; margin: auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         h1 { color: #1877f2; text-align: center; font-size: 28px; margin-bottom: 30px; }
         .toolbar { display: flex; gap: 15px; justify-content: center; margin-bottom: 30px; }
-        .btn { padding: 12px 28px; text-decoration: none; color: white; border-radius: 10px; font-weight: bold; transition: 0.3s; cursor: pointer; border: none; font-size: 16px; }
+        .btn { padding: 12px 28px; text-decoration: none; color: white; border-radius: 10px; font-weight: bold; transition: 0.3s; cursor: pointer; border: none; font-size: 16px; display: inline-block; }
         .btn-blue { background: #1877f2; } .btn-blue:hover { background: #166fe5; }
         .btn-red { background: #fa3e3e; } .btn-red:hover { background: #e03535; }
-        .log-box { background: #1c1e21; color: #e4e6eb; padding: 25px; border-radius: 12px; font-family: 'Consolas', monospace; font-size: 14px; min-height: 200px; line-height: 1.7; border-left: 5px solid #1877f2; }
+        .log-box { background: #1c1e21; color: #e4e6eb; padding: 25px; border-radius: 12px; font-family: 'Consolas', monospace; font-size: 14px; min-height: 150px; line-height: 1.7; border-left: 5px solid #1877f2; }
         .success { color: #45bd62; } .warning { color: #f7b928; } .error { color: #f3425f; }
         .footer { text-align: center; color: #65676b; font-size: 13px; margin-top: 30px; line-height: 1.6; }
     </style></head><body><div class='container'><h1>🚀 ระบบควบคุมบอตโรงเรียนนางรอง (M.3/5)</h1><div class='toolbar'>";
     echo "<a href='bot.php?action=run' class='btn btn-blue'>▶️ เริ่มสแกนข่าว</a> ";
     echo "<a href='bot.php?action=check' class='btn btn-red'>🔍 เช็คสถานะฐานข้อมูล</a>";
-    echo "</div><div class='log-box'>ยินดีต้อนรับครับเอิร์ก พักผ่อนก่อนนะ เดี๋ยวระบบจัดการต่อเองครับ</div>";
-    echo "<div class='footer'>บอตได้รับอิสระ ไม่เป็นทาสการสแปมตามพระราชบัญญัติเลิกทาส ร.ศ. 124 🇹🇭<br>พัฒนาด้วย ❤️ โดย Admin Ek (Chatinon Jakram)</div></div></body></html>";
-} elseif ($action == 'check') {
-    $test = google_db("get", "test_connection");
-    echo "Google Sheets Status: " . ($test !== "DATABASE_CONNECT_FAIL" ? "✅ OK ($test)" : "❌ FAIL (โปรดเช็ค URL GAS หรือสิทธิ์การเข้าถึง)");
+    echo "</div><div class='log-box'>";
+
+    if ($action === 'check') {
+        $test = google_db("get", "test_connection");
+        echo "Google Sheets Status: " . ($test !== "DATABASE_CONNECT_FAIL" ? "<span class='success'>✅ OK ($test)</span>" : "<span class='error'>❌ FAIL (โปรดเช็ค URL GAS)</span>");
+    } elseif ($action === 'run') {
+        echo "<b>กำลังเริ่มสแกน...</b><br>";
+        process_bot(false);
+    } else {
+        echo "ยินดีต้อนรับครับเอิร์ก พักผ่อนก่อนนะ เดี๋ยวระบบจัดการต่อเองครับ<br>สถานะระบบป้องกันสแปม: <span class='success'>ทำงาน</span>";
+    }
+
+    echo "</div><div class='footer'>บอตได้รับอิสระ ไม่เป็นทาสการสแปมตามพระราชบัญญัติเลิกทาส ร.ศ. 124 🇹🇭<br>พัฒนาด้วย ❤️ โดย Admin Ek (Chatinon Jakram)</div></div></body></html>";
 } else {
-    // โหมดการทำงานจริง (Cron หรือกด Run)
-    if (!$is_cron) echo "<h1>Scanning...</h1><hr>";
+    // โหมด Cron (ไม่มีผลต่อหน้าเว็บ)
+    process_bot(true);
+}
+
+// --- [ 5. BOT CORE LOGIC ] ---
+function process_bot($is_cron) {
+    global $rss_sources, $webhook_url;
     
     foreach ($rss_sources as $name => $info) {
         $key = substr(md5($info['rss']), 0, 8);
@@ -85,33 +95,27 @@ if ($action == 'view') {
 
         $item = $rss->channel->item[0];
         $guid = (string)$item->guid;
-
-        // 1. ตรวจสอบกับฐานข้อมูล
         $last_guid = google_db("get", $key);
 
-        // ระบบป้องกันสแปม: ถ้าติดต่อ DB ไม่ได้ ห้ามส่ง Discord เด็ดขาด
         if ($last_guid === "DATABASE_CONNECT_FAIL") {
-            if (!$is_cron) echo "• $name: <span style='color:red;'>❌ ฐานข้อมูลขัดข้อง (หยุดส่งเพื่อป้องกันการเด้งรัว)</span><br>";
+            if (!$is_cron) echo "• $name: <span class='error'>❌ ฐานข้อมูลขัดข้อง (ข้ามเพื่อป้องกันสแปม)</span><br>";
             continue; 
         }
 
-        // 2. ถ้าข่าวซ้ำ ให้ข้ามไป
         if ($guid === $last_guid) {
-            if (!$is_cron) echo "• $name: <span style='color:orange;'>ข่าวเดิม (ข้าม)</span><br>";
+            if (!$is_cron) echo "• $name: <span class='warning'>ข่าวเดิม</span><br>";
             continue;
         }
 
-        // 3. ดึงรูปภาพ
+        // ดึงรูปภาพ
         $image_url = "";
         $ns = $rss->getNamespaces(true);
         if (isset($ns['media'])) {
             $media = $item->children($ns['media']);
-            if (isset($media->content)) {
-                $image_url = (string)$media->content->attributes()->url;
-            }
+            if (isset($media->content)) $image_url = (string)$media->content->attributes()->url;
         }
 
-        // 4. ส่งเข้า Discord (Full Option)
+        // ส่ง Discord
         $payload = [
             "username" => $name,
             "avatar_url" => $info['avatar'],
@@ -131,11 +135,9 @@ if ($action == 'view') {
         curl_exec($ch);
         curl_close($ch);
 
-        // 5. บันทึก GUID ลงฐานข้อมูล
         google_db("set", $key, $guid);
-        if (!$is_cron) echo "• $name: <span style='color:green;'>✅ ส่งข่าวใหม่เรียบร้อย!</span><br>";
-        
-        usleep(300000); // พัก 0.3 วินาที
+        if (!$is_cron) echo "• $name: <span class='success'>✅ ส่งข่าวใหม่แล้ว!</span><br>";
+        usleep(300000);
     }
-    if ($is_cron) echo "Cron success: " . date("Y-m-d H:i:s");
+    if ($is_cron) echo "Cron job executed at " . date("H:i:s");
 }
