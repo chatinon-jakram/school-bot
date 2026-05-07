@@ -11,7 +11,7 @@ date_default_timezone_set("Asia/Bangkok");
 
 // --- [ 1. CONFIGURATION ] ---
 $gas_url = "https://script.google.com/macros/s/AKfycbwXtpKmLqEY83CpbgEpE5pyN5_ATjP4E0bhhwc3QKB2f9spFeS5CxgiSyJNNf-Z14A/exec"; 
-$webhook_url = "https://discord.com/api/webhooks/1501520381826043946/TIa1l2i3REl96ZStVCpKi5xveJER2jowCGJHyQX_7NySc5jYk80pZUClFjrEpJP7N9Vd";
+$webhook_url = "https://discord.com/api/webhooks/1501923504109522984/PDMLYn33HxKrBo6TagiF01wrssvzYjx-j0fm4Z7uKPMYLlSCf0lKdY7O2o4yBFH2kIA6";
 
 $action = isset($_GET['action']) ? $_GET['action'] : 'view';
 
