@@ -1,33 +1,36 @@
 <?php
 /**
- * NR RSS BOT - Version: Full Power (Admin Ek Special)
+ * NR RSS BOT - Version: The Emancipation Proclamation (ร.ศ. 124)
  * พัฒนาโดย: Admin Ek (M.3/5) & Gemini
  */
 
-// ปิดการโชว์ Warning เพื่อความสะอาดของหน้าจอ
+// ปิดการโชว์ Warning กวนใจ
 error_reporting(E_ERROR | E_PARSE);
 
 // --- [ 1. CONFIGURATION ] ---
 $gas_url = "https://script.google.com/macros/s/AKfycbx5ue2dzjSFqCJ6gN-XJJOtL9j3ICMuifD5A6YDegj2oFsRRZrtzGrahPzNnVYEgxyZ/exec"; 
 $webhook_url = "https://discord.com/api/webhooks/1501520381826043946/TIa1l2i3REl96ZStVCpKi5xveJER2jowCGJHyQX_7NySc5jYk80pZUClFjrEpJP7N9Vd";
 
-// ตรวจสอบสถานะการเข้าถึง
+// ตรวจสอบสถานะการเข้าถึง (ต้องมี ?action ถึงจะโชว์หน้าเว็บ)
 $action = isset($_GET['action']) ? $_GET['action'] : null;
 $is_cron = ($action === null); 
 
 // --- [ 2. CORE FUNCTIONS ] ---
 function google_db($act, $k, $v = "") {
     global $gas_url;
+    $post_data = json_encode(["action" => $act, "key" => $k, "val" => $v]);
     $ch = curl_init($gas_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(["action" => $act, "key" => $k, "val" => $v]));
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
     curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
     $res = curl_exec($ch);
     $err = curl_error($ch);
     curl_close($ch);
-    return $err ? "" : trim($res);
+    if ($err) return "ERROR_CONN";
+    return trim($res);
 }
 
 // --- [ 3. ALL RSS SOURCES (ครบ 11 แหล่งข่าว) ] ---
@@ -47,7 +50,7 @@ $rss_sources = [
 
 // --- [ 4. EXECUTION LOGIC ] ---
 if ($is_cron) {
-    // โหมด Cron (ไม่มี ?action) ให้รันสแกนเงียบๆ และพ่นข้อความสั้นๆ
+    // โหมด Cron (รันเงียบๆ)
     foreach ($rss_sources as $name => $info) {
         $key = substr(md5($info['rss']), 0, 8);
         $rss = @simplexml_load_file($info['rss']);
@@ -57,7 +60,7 @@ if ($is_cron) {
         $guid = (string)$item->guid;
         $last_guid = google_db("get", $key);
 
-        if ($last_guid != "" && $guid === $last_guid) continue;
+        if ($last_guid !== "ERROR_CONN" && $guid === $last_guid) continue;
 
         // ดึงรูปภาพ
         $image_url = ""; $ns = $rss->getNamespaces(true);
@@ -70,9 +73,9 @@ if ($is_cron) {
         google_db("set", $key, $guid);
         usleep(300000);
     }
-    echo "Cron Job Success: " . date("H:i:s");
+    echo "Cron completed successfully at " . date("H:i:s");
 } else {
-    // โหมด Web UI (มี ?action)
+    // โหมด Web UI
     echo "<!DOCTYPE html><html lang='th'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>NR Bot Control Panel</title>";
     echo "<style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
@@ -97,32 +100,37 @@ if ($is_cron) {
     echo "</div><div class='log-box'>";
 
     if ($action == 'check') {
-        echo "<div class='info'>[SYSTEM] กำลังทดสอบระบบ...</div>";
+        echo "<div class='info'>[SYSTEM] กำลังตรวจสอบความเสถียร...</div>";
         $test = google_db("get", "test_connection");
-        echo "• Google Sheets: " . ($test != "" ? "<span class='success'>✅ OK ($test)</span>" : "<span class='error'>❌ FAIL</span>") . "<br>";
+        echo "• Google Sheets (Database): " . ($test != "ERROR_CONN" ? "<span class='success'>✅ OK ($test)</span>" : "<span class='error'>❌ FAIL (Connection Timeout)</span>") . "<br>";
+        
         $ch = curl_init($webhook_url); curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
         echo "• Discord Webhook: " . ($code != 404 ? "<span class='success'>✅ OK ($code)</span>" : "<span class='error'>❌ URL ERROR</span>") . "<br>";
+        
     } elseif ($action == 'run') {
-        echo "<div class='info'>[RUN] เริ่มสแกนหาข่าวใหม่ (" . date("H:i:s") . ")</div><hr>";
+        echo "<div class='info'>[RUN] กำลังสแกนหาข่าวใหม่ (" . date("H:i:s") . ")</div><hr>";
         foreach ($rss_sources as $name => $info) {
             $key = substr(md5($info['rss']), 0, 8);
             $rss = @simplexml_load_file($info['rss']);
-            if (!$rss || !isset($rss->channel->item[0])) { echo "• $name: <span class='error'>อ่าน Feed ไม่ได้</span><br>"; continue; }
+            if (!$rss || !isset($rss->channel->item[0])) { echo "• $name: <span class='error'>❌ อ่าน Feed ไม่ได้</span><br>"; continue; }
             $item = $rss->channel->item[0];
             $guid = (string)$item->guid;
             $last_guid = google_db("get", $key);
-            if ($last_guid != "" && $guid === $last_guid) { echo "• $name: <span class='warning'>ข่าวเดิม (ข้าม)</span><br>"; continue; }
+            if ($last_guid !== "ERROR_CONN" && $guid === $last_guid) { echo "• $name: <span class='warning'>ข่าวเดิม (ข้าม)</span><br>"; continue; }
             
             // ส่ง Discord
             $payload = ["username" => $name, "avatar_url" => $info['avatar'], "embeds" => [["title" => "📌 ".(string)$item->title, "url" => (string)$item->link, "color" => hexdec($info['color']), "footer" => ["text" => "M.3/5 | ".date("H:i")]]]];
             $ch = curl_init($webhook_url); curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload)); curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']); curl_exec($ch); curl_close($ch);
             google_db("set", $key, $guid);
-            echo "• $name: <span class='success'>✅ ส่งข่าวใหม่แล้ว!</span><br>";
+            echo "• $name: <span class='success'>✅ ตรวจพบข่าวใหม่และส่งแล้ว!</span><br>";
             usleep(200000);
         }
         echo "<hr><div class='info'>[DONE] สแกนเสร็จสมบูรณ์</div>";
     } else {
-        echo "<div style='text-align:center;'>ยินดีต้อนรับครับ Admin Ek!<br>เลือกเมนูควบคุมด้านบนได้เลยครับ</div>";
+        echo "<div style='text-align:center;'>ยินดีต้อนรับกลับครับเอิร์ก!<br>พักผ่อนให้เต็มที่ครับ บอตพร้อมสแตนด์บายแล้ว</div>";
     }
-    echo "</div><p style='text-align:center; color:#888; font-size:12px; margin-top:20px;'>บอตได้รับอิสระ พัฒนาโดย Admin Ek (Chatinon Jakram)</p></div></body></html>";
+
+    echo "</div>"; 
+    echo "<p style='text-align:center; color:#888; font-size:12px; margin-top:20px;'>บอตได้รับอิสระ ไม่เป็นทาสการสแปมตามพระราชบัญญัติเลิกทาส ร.ศ. 124 🇹🇭<br>พัฒนาโดย Admin Ek (Chatinon Jakram)</p>";
+    echo "</div></body></html>";
 }
