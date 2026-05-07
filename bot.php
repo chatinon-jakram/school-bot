@@ -1,6 +1,6 @@
 <?php
 /**
- * NR RSS BOT - Version: Anti-Spam Freedom (ปลดปล่อยจากการส่งซ้ำ)
+ * NR RSS BOT - Version: Anti-Spam Freedom (Final Polish)
  * พัฒนาโดย: Admin Ek (M.3/5) & Gemini
  */
 
@@ -8,12 +8,13 @@
 $gas_url = "https://script.google.com/macros/s/AKfycbx5ue2dzjSFqCJ6gN-XJJOtL9j3ICMuifD5A6YDegj2oFsRRZrtzGrahPzNnVYEgxyZ/exec"; 
 $webhook_url = "https://discord.com/api/webhooks/1501520381826043946/TIa1l2i3REl96ZStVCpKi5xveJER2jowCGJHyQX_7NySc5jYk80pZUClFjrEpJP7N9Vd";
 
-// เช็คว่าเป็นการรันผ่านหน้าเว็บ (มีปุ่ม) หรือรันผ่านระบบ (Cron)
+// เช็คว่าเป็นการรันผ่านหน้าเว็บ หรือรันผ่านระบบ (Cron)
+// แก้ไขบรรทัดที่ 16: ใช้ isset เช็คก่อนเพื่อกัน Warning
+$action = isset($_GET['action']) ? $_GET['action'] : 'view';
 $is_cron = (php_sapi_name() === 'cli' || !isset($_GET['action']));
 
 // --- [ 2. UI & STYLE ] ---
-// ถ้าไม่ใช่ Cron (คือเปิดหน้าเว็บปกติ) ให้พ่น CSS และปุ่มออกมา
-if (!$is_cron || $_GET['action'] == 'run' || $_GET['action'] == 'check') {
+if (!$is_cron || $action == 'run' || $action == 'check') {
     echo "<!DOCTYPE html><html lang='th'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>NR Bot Control Panel</title>";
     echo "<style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
@@ -71,8 +72,6 @@ $rss_sources = [
 ];
 
 // --- [ 5. EXECUTION LOGIC ] ---
-$action = $_GET['action'] ?? 'view';
-
 if ($action == 'check') {
     echo "<div class='info'>[SYSTEM] กำลังทดสอบการเชื่อมต่อพื้นฐาน...</div>";
     $test = google_db("get", "test_connection");
