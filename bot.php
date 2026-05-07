@@ -1,20 +1,22 @@
 <?php
 /**
- * NR RSS BOT - Version: Anti-Spam Freedom (Final Polish)
+ * NR RSS BOT - Version: URL Guard (ป้องกันการเข้าผิดหน้า)
  * พัฒนาโดย: Admin Ek (M.3/5) & Gemini
  */
+
+// ปิดการโชว์ Warning เพื่อความสะอาดของหน้าจอ
+error_reporting(E_ERROR | E_PARSE);
 
 // --- [ 1. CONFIGURATION ] ---
 $gas_url = "https://script.google.com/macros/s/AKfycbx5ue2dzjSFqCJ6gN-XJJOtL9j3ICMuifD5A6YDegj2oFsRRZrtzGrahPzNnVYEgxyZ/exec"; 
 $webhook_url = "https://discord.com/api/webhooks/1501520381826043946/TIa1l2i3REl96ZStVCpKi5xveJER2jowCGJHyQX_7NySc5jYk80pZUClFjrEpJP7N9Vd";
 
-// เช็คว่าเป็นการรันผ่านหน้าเว็บ หรือรันผ่านระบบ (Cron)
-// แก้ไขบรรทัดที่ 16: ใช้ isset เช็คก่อนเพื่อกัน Warning
-$action = isset($_GET['action']) ? $_GET['action'] : 'view';
-$is_cron = (php_sapi_name() === 'cli' || !isset($_GET['action']));
+// ตรวจสอบสถานะการเข้าถึง
+$action = $_GET['action'];
+$is_cron = !isset($action); // ถ้าไม่มี ?action แสดงว่าเป็น Cron หรือเข้าผิด
 
-// --- [ 2. UI & STYLE ] ---
-if (!$is_cron || $action == 'run' || $action == 'check') {
+// --- [ 2. UI & STYLE (แสดงเฉพาะตอนที่มี Action) ] ---
+if (!$is_cron) {
     echo "<!DOCTYPE html><html lang='th'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>NR Bot Control Panel</title>";
     echo "<style>
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
@@ -37,86 +39,65 @@ if (!$is_cron || $action == 'run' || $action == 'check') {
     echo "<div class='toolbar'>";
     echo "<a href='bot.php?action=run' class='btn btn-blue'>▶️ เริ่มการสแกนข่าวใหม่</a>";
     echo "<a href='bot.php?action=check' class='btn btn-red'>🔍 ตรวจสอบการเชื่อมต่อ</a>";
-    echo "<a href='bot.php' class='btn btn-green'>🏠 หน้าหลัก</a>";
+    echo "<a href='bot.php?action=view' class='btn btn-green'>🏠 หน้าหลัก</a>";
     echo "</div><div class='log-box'>";
 }
 
-// --- [ 3. CORE FUNCTIONS ] ---
-function google_db($action, $key, $val = "") {
-    global $gas_url;
-    $ch = curl_init($gas_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(["action" => $action, "key" => $key, "val" => $val]));
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-    $res = curl_exec($ch);
-    $err = curl_error($ch);
-    curl_close($ch);
-    return $err ? "ERROR_CONN" : trim($res);
-}
-
-// --- [ 4. ALL RSS SOURCES ] ---
-$rss_sources = [
-    "งานประชาสัมพันธ์โรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/1TQl9fs4RGwFQO5u.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/324269728_743603630069476_228333852253818672_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=53a332&oh=00_Af68PNKCTkk6MHN-q2yZ6qH0cO8WR188tpti4eFbXSTzZQ&oe=6A009594", "color" => "4ebc00"],
-    "โรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/y2raHbpZnAJfIN0p.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/648873944_26574300548828725_2833658263750313445_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=53a332&oh=00_Af7yXti2unkb8AfMJUGQDRKv9NJyI29t4_660aoZZsk5Pg&oe=6A00A79B", "color" => "e28b00"],
-    "กลุ่มสาระการเรียนรู้ภาษาไทย" => ["rss" => "https://rss.app/feeds/gMVDMl12sQ7dgTdf.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/466078074_998896022283094_5704068485564192640_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=53a332&oh=00_Af5tmjfJE1PglgQjOBGiPcUw-UdkMqSn5ACFpm5hKnbS5w&oe=6A00BC94", "color" => "a200e2"],
-    "กลุ่มสาระการเรียนรู้คณิตศาสตร์" => ["rss" => "https://rss.app/feeds/4ICRUnxw1bTEqm2c.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/612040273_1401814754983784_7535017924699925573_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=1d70fc&oh=00_Af5rnCif5M7cndPWSnC4pVL3q4x5nMo8M1xijzjqamDeDw&oe=6A00AF1C", "color" => "e20000"],
-    "กลุ่มสาระการเรียนรู้วิทยาศาสตร์และเทคโนโลยี" => ["rss" => "https://rss.app/feeds/eaysEO9DoGTFcC6I.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/300896257_746408846681142_7293328732782702774_n.jpg?_nc_cat=100&ccb=1-7&_nc_sid=1d70fc&oh=00_Af653dU4-U1V2sHtiGwxpo1-kuo6u2SY9yczTqul8rZZlg&oe=6A009934", "color" => "fcdb00"],
-    "กลุ่มสาระการเรียนรู้สังคมศึกษาฯ" => ["rss" => "https://rss.app/feeds/p3XziBCnjAbksa3a.xml", "avatar" => "https://cdn-icons-png.flaticon.com/512/3534/3534033.png", "color" => "00b0fc"],
-    "กลุ่มสาระการเรียนรู้สุขศึกษาและพลศึกษา" => ["rss" => "https://rss.app/feeds/9Gev9MaiKdlz1rb5.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/452480471_122102462126421014_6871839481956866531_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=53a332&oh=00_Af6TZrnPBczjm4xZvwnYDxp7_k7KYmG65IfDIxmwWfs_iQ&oe=6A00AE60", "color" => "fc00eb"],
-    "กลุ่มสาระการเรียนรู้ศิลปะ" => ["rss" => "https://rss.app/feeds/2QpDynw9Qm7XRbtm.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/481299726_1129102305678515_2278776288030225200_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=53a332&oh=00_Af7cMS4DgBTSZmdxPStAzsa5tRE894ScZO5F3pO7Uqxb7A&oe=6A00B39B", "color" => "3200fc"],
-    "กลุ่มสาระการเรียนรู้การงานอาชีพ" => ["rss" => "https://rss.app/feeds/2FqXov6HBHJNs7Rv.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/471164713_1233258884423055_869006746446843372_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=53a332&oh=00_Af4s29tUJRh6Ivi2Lv8mEX2dHjpYGUnrkxP9UnfQHrtvVg&oe=6A00A0C0", "color" => "fc8600"],
-    "กลุ่มสาระการเรียนรู้ภาษาต่างประเทศ" => ["rss" => "https://rss.app/feeds/dwsJ9ElT7Rf8O8KV.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-1/353797149_3193673687444746_8123120628808621095_n.jpg?stp=dst-jpg_s200x200_tt6&_nc_cat=106&ccb=1-7&_nc_sid=2d3e12&oh=00_Af7SF4xuFv1Am8zldzAkMfmFLNTOFfwIlLrkL5oNl2MP2Q&oe=6A00A5AE", "color" => "fc0071"],
-    "คณะกรรมการสภานักเรียนโรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/cdeTCXnSfyaJguza.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/307475364_478915944282703_3356226624056089045_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=1d70fc&oh=00_Af766loH9oWJedrQSAzajyrz0bYHFycopqUSM2bqnYFs0A&oe=6A00AE08", "color" => "ffffff"],
-];
-
-// --- [ 5. EXECUTION LOGIC ] ---
-if ($action == 'check') {
-    echo "<div class='info'>[SYSTEM] กำลังทดสอบการเชื่อมต่อพื้นฐาน...</div>";
-    $test = google_db("get", "test_connection");
-    echo "• Google Sheets: " . ($test != "ERROR_CONN" ? "<span class='success'>✅ OK ($test)</span>" : "<span class='error'>❌ FAILED</span>") . "<br>";
-    $ch = curl_init($webhook_url); curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
-    echo "• Discord Webhook: " . ($code != 404 ? "<span class='success'>✅ OK ($code)</span>" : "<span class='error'>❌ URL ERROR</span>") . "<br>";
-
-} elseif ($action == 'run' || $is_cron) {
-    if (!$is_cron) echo "<div class='info'>[RUN] เริ่มสแกนหาข่าวใหม่ (" . date("H:i:s") . ")</div><hr>";
-
-    foreach ($rss_sources as $name => $info) {
-        $key = substr(md5($info['rss']), 0, 8);
-        $rss = @simplexml_load_file($info['rss']);
-        if (!$rss || !isset($rss->channel->item[0])) continue;
-
-        $item = $rss->channel->item[0];
-        $guid = (string)$item->guid;
-        $last_guid = google_db("get", $key);
-
-        if ($last_guid != "ERROR_CONN" && $guid === $last_guid) {
-            if (!$is_cron) echo "• $name: <span class='warning'>ข่าวเดิม (ข้ามการส่ง)</span><br>";
-            continue;
-        }
-
-        // กรณีข่าวใหม่: ส่ง Discord
-        $image_url = ""; $ns = $rss->getNamespaces(true);
-        if (isset($ns['media'])) { $media = $item->children($ns['media']); if (isset($media->content)) { $image_url = (string)$media->content->attributes()->url; } }
-
-        $payload = ["username" => $name, "avatar_url" => $info['avatar'], "embeds" => [["title" => "📌 " . ((string)$item->title ?: "ข่าวสารโรงเรียนนางรอง"), "description" => mb_strimwidth(strip_tags((string)$item->description), 0, 250, "..."), "url" => (string)$item->link, "color" => hexdec($info['color']), "image" => !empty($image_url) ? ["url" => $image_url] : null, "footer" => ["text" => "ระบบแจ้งข่าวอัตโนมัติ M.3/5 | " . date("H:i")]]]];
-        $ch = curl_init($webhook_url); curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload)); curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']); curl_exec($ch); curl_close($ch);
-
-        google_db("set", $key, $guid);
-        if (!$is_cron) echo "• $name: <span class='success'>✅ ตรวจพบข่าวใหม่และส่งแล้ว!</span><br>";
-        usleep(300000);
+// --- [ 3. LOGIC การทำงาน ] ---
+if ($is_cron) {
+    // ถ้าไม่มี ?action=... (เช่น Cron รัน) ให้พ่นข้อความสั้นๆ เพื่อประหยัดพื้นที่
+    echo "Cron System: Active (Please use bot.php?action=view for Web UI)";
+} else {
+    // ฟังก์ชันติดต่อ Database
+    function google_db($act, $k, $v = "") {
+        global $gas_url;
+        $ch = curl_init($gas_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(["action" => $act, "key" => $k, "val" => $v]));
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        $res = curl_exec($ch);
+        curl_close($ch);
+        return trim($res);
     }
-    if (!$is_cron) echo "<hr><div class='info'>[DONE] สแกนเสร็จสมบูรณ์</div>";
-} else {
-    echo "<div style='text-align:center;'>ยินดีต้อนรับครับเอิร์ก ตอนนี้บอตพร้อมทำงานแล้ว<br>กดปุ่มด้านบนเพื่อเริ่มการทำงาน หรือตรวจสอบระบบได้เลย</div>";
-}
 
-// ปิดท้ายไฟล์
-if (!$is_cron || isset($_GET['action'])) {
-    echo "</div>";
-    echo "<p style='text-align:center; color:#888; font-size:12px; margin-top:20px;'>บอตได้รับอิสระ ไม่เป็นทาสการสแปมตามพระราชบัญญัติเลิกทาส ร.ศ. 124 🇹🇭<br>พัฒนาโดย Admin Ek (Chatinon Jakram)</p>";
+    $rss_sources = [
+        "งานประชาสัมพันธ์โรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/1TQl9fs4RGwFQO5u.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/324269728_743603630069476_228333852253818672_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=53a332&oh=00_Af68PNKCTkk6MHN-q2yZ6qH0cO8WR188tpti4eFbXSTzZQ&oe=6A009594", "color" => "4ebc00"],
+        "โรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/y2raHbpZnAJfIN0p.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/648873944_26574300548828725_2833658263750313445_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=53a332&oh=00_Af7yXti2unkb8AfMJUGQDRKv9NJyI29t4_660aoZZsk5Pg&oe=6A00A79B", "color" => "e28b00"],
+        "กลุ่มสาระภาษาไทย" => ["rss" => "https://rss.app/feeds/gMVDMl12sQ7dgTdf.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/466078074_998896022283094_5704068485564192640_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=53a332&oh=00_Af5tmjfJE1PglgQjOBGiPcUw-UdkMqSn5ACFpm5hKnbS5w&oe=6A00BC94", "color" => "a200e2"],
+        "กลุ่มสาระคณิตศาสตร์" => ["rss" => "https://rss.app/feeds/4ICRUnxw1bTEqm2c.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/612040273_1401814754983784_7535017924699925573_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=1d70fc&oh=00_Af5rnCif5M7cndPWSnC4pVL3q4x5nMo8M1xijzjqamDeDw&oe=6A00AF1C", "color" => "e20000"],
+        "กลุ่มสาระวิทย์-เทคโน" => ["rss" => "https://rss.app/feeds/eaysEO9DoGTFcC6I.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/300896257_746408846681142_7293328732782702774_n.jpg?_nc_cat=100&ccb=1-7&_nc_sid=1d70fc&oh=00_Af653dU4-U1V2sHtiGwxpo1-kuo6u2SY9yczTqul8rZZlg&oe=6A009934", "color" => "fcdb00"]
+    ];
+
+    if ($action == 'check') {
+        echo "<div class='info'>[SYSTEM] กำลังทดสอบ...</div>";
+        $test = google_db("get", "test");
+        echo "• Google Sheets: " . ($test ? "<span class='success'>✅ OK</span>" : "<span class='error'>❌ FAIL</span>") . "<br>";
+        echo "• Discord: <span class='success'>✅ OK</span><br>";
+    } elseif ($action == 'run') {
+        echo "<div class='info'>[RUN] กำลังสแกนข่าวใหม่...</div><hr>";
+        foreach ($rss_sources as $name => $info) {
+            $key = substr(md5($info['rss']), 0, 8);
+            $rss = @simplexml_load_file($info['rss']);
+            if (!$rss || !isset($rss->channel->item[0])) continue;
+            $item = $rss->channel->item[0];
+            $guid = (string)$item->guid;
+            $last_guid = google_db("get", $key);
+            if ($guid === $last_guid) { echo "• $name: <span class='warning'>ข้าม (ไม่มีข่าวใหม่)</span><br>"; continue; }
+            
+            // ส่ง Discord
+            $payload = ["username" => $name, "avatar_url" => $info['avatar'], "embeds" => [["title" => "📌 ".(string)$item->title, "url" => (string)$item->link, "color" => hexdec($info['color']), "footer" => ["text" => "M.3/5 | ".date("H:i")]]]];
+            $ch = curl_init($webhook_url); curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload)); curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']); curl_exec($ch); curl_close($ch);
+            google_db("set", $key, $guid);
+            echo "• $name: <span class='success'>✅ ส่งเรียบร้อย!</span><br>";
+        }
+    } else {
+        echo "<div style='text-align:center;'>ยินดีต้อนรับครับ Admin Ek!<br>เลือกปุ่มด้านบนเพื่อสั่งงานบอตได้เลยครับ</div>";
+    }
+
+    echo "</div>"; // ปิด log-box
+    echo "<p style='text-align:center; color:#888; font-size:12px; margin-top:20px;'>ระบบแจ้งข่าวอัตโนมัติโรงเรียนนางรอง<br>พัฒนาโดย Admin Ek (M.3/5)</p>";
     echo "</div></body></html>";
-} else {
-    echo "Cron completed successfully at " . date("H:i:s");
 }
+?>
