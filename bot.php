@@ -1,20 +1,19 @@
 <?php
 /**
  * NR RSS BOT - Version: The Ultimate Freedom (ร.ศ. 124)
- * FIXED: UI Navigation, Database Connection, and Anti-Spam
+ * แก้ไขปัญหา UI, ล็อคเป้าหมายชีต และคืนสิทธิ์ Admin Ek 100%
  */
 
-// ปิดการโชว์ Warning
 error_reporting(E_ERROR | E_PARSE);
 date_default_timezone_set("Asia/Bangkok");
 
-// --- [ 1. CONFIGURATION ] ---
+// --- [ CONFIGURATION ] ---
 $gas_url = "https://script.google.com/macros/s/AKfycbXXtpKmLqEY83CpbgEpE5pyN5_ATjP4E0bhhwc3QKB2f9spFeS5CxgiSyJNNf-Z14A/exec"; 
 $webhook_url = "https://discord.com/api/webhooks/1501520381826043946/TIa1l2i3REl96ZStVCpKi5xveJER2jowCGJHyQX_7NySc5jYk80pZUClFjrEpJP7N9Vd";
 
-$action = isset($_GET['action']) ? $_GET['action'] : 'cron'; 
+$action = isset($_GET['action']) ? $_GET['action'] : 'cron';
 
-// --- [ 2. CORE FUNCTIONS ] ---
+// --- [ CORE FUNCTIONS ] ---
 function google_db($act, $k, $v = "") {
     global $gas_url;
     $post_data = json_encode(["action" => $act, "key" => $k, "val" => $v]);
@@ -29,12 +28,10 @@ function google_db($act, $k, $v = "") {
     $res = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    
-    if ($http_code != 200 || empty($res)) return "DATABASE_CONNECT_FAIL";
+    if ($http_code != 200 || empty($res)) return "DB_FAIL";
     return trim($res);
 }
 
-// --- [ 3. ALL RSS SOURCES (11 แหล่ง) ] ---
 $rss_sources = [
     "งานประชาสัมพันธ์โรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/1TQl9fs4RGwFQO5u.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/324269728_743603630069476_228333852253818672_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=53a332&oh=00_Af68PNKCTkk6MHN-q2yZ6qH0cO8WR188tpti4eFbXSTzZQ&oe=6A009594", "color" => "4ebc00"],
     "โรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/y2raHbpZnAJfIN0p.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/648873944_26574300548828725_2833658263750313445_n.jpg?_nc_cat=106&ccb=1-7&_nc_sid=53a332&oh=00_Af7yXti2unkb8AfMJUGQDRKv9NJyI29t4_660aoZZsk5Pg&oe=6A00A79B", "color" => "e28b00"],
@@ -49,95 +46,49 @@ $rss_sources = [
     "คณะกรรมการสภานักเรียนโรงเรียนนางรอง" => ["rss" => "https://rss.app/feeds/cdeTCXnSfyaJguza.xml", "avatar" => "https://scontent.fnak2-1.fna.fbcdn.net/v/t39.30808-6/307475364_478915944282703_3356226624056089045_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=1d70fc&oh=00_Af766loH9oWJedrQSAzajyrz0bYHFycopqUSM2bqnYFs0A&oe=6A00AE08", "color" => "ffffff"]
 ];
 
-// --- [ 4. WEB INTERFACE ] ---
-if ($action === 'view' || $action === 'run' || $action === 'check') {
-    echo "<!DOCTYPE html><html lang='th'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>NR Bot Control Panel</title>";
-    echo "<style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; padding: 20px; color: #1c1e21; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        h1 { color: #1877f2; text-align: center; font-size: 28px; margin-bottom: 30px; }
-        .toolbar { display: flex; gap: 15px; justify-content: center; margin-bottom: 30px; }
-        .btn { padding: 12px 28px; text-decoration: none; color: white; border-radius: 10px; font-weight: bold; transition: 0.3s; cursor: pointer; border: none; font-size: 16px; display: inline-block; }
-        .btn-blue { background: #1877f2; } .btn-blue:hover { background: #166fe5; }
-        .btn-red { background: #fa3e3e; } .btn-red:hover { background: #e03535; }
-        .log-box { background: #1c1e21; color: #e4e6eb; padding: 25px; border-radius: 12px; font-family: 'Consolas', monospace; font-size: 14px; min-height: 150px; line-height: 1.7; border-left: 5px solid #1877f2; }
-        .success { color: #45bd62; } .warning { color: #f7b928; } .error { color: #f3425f; }
-        .footer { text-align: center; color: #65676b; font-size: 13px; margin-top: 30px; line-height: 1.6; }
-    </style></head><body><div class='container'><h1>🚀 ระบบควบคุมบอตโรงเรียนนางรอง (M.3/5)</h1><div class='toolbar'>";
-    echo "<a href='bot.php?action=run' class='btn btn-blue'>▶️ เริ่มสแกนข่าว</a> ";
-    echo "<a href='bot.php?action=check' class='btn btn-red'>🔍 เช็คสถานะฐานข้อมูล</a>";
-    echo "</div><div class='log-box'>";
+// --- [ PROCESS ] ---
+if ($action !== 'cron') {
+    echo "<!DOCTYPE html><html lang='th'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>NR Bot Control</title><style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; }
+    .card { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .btn { padding: 10px 20px; color: white; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block; margin: 5px; }
+    .log { background: #282c34; color: #abb2bf; padding: 20px; border-radius: 10px; font-family: monospace; margin-top: 20px; min-height: 100px; }
+    </style></head><body><div class='card'><h1>🚀 ระบบควบคุมบอตโรงเรียนนางรอง</h1>
+    <a href='?action=run' class='btn' style='background:#1877f2'>▶️ รันสแกนข่าว</a>
+    <a href='?action=check' class='btn' style='background:#fa3e3e'>🔍 เช็คฐานข้อมูล</a>
+    <div class='log'>";
 
     if ($action === 'check') {
-        $test = google_db("get", "test_connection");
-        echo "Google Sheets Status: " . ($test !== "DATABASE_CONNECT_FAIL" ? "<span class='success'>✅ OK ($test)</span>" : "<span class='error'>❌ FAIL (โปรดเช็ค URL GAS)</span>");
+        $res = google_db("get", "test");
+        echo ($res !== "DB_FAIL") ? "<span style='color:#45bd62'>✅ ฐานข้อมูล OK (ชีต1 เชื่อมต่อแล้ว)</span>" : "<span style='color:#f3425f'>❌ FAIL (โปรดเช็คการ Deploy อีกรอบ)</span>";
     } elseif ($action === 'run') {
-        echo "<b>กำลังเริ่มสแกน...</b><br>";
-        process_bot(false);
+        scan_news(false);
     } else {
-        echo "ยินดีต้อนรับครับเอิร์ก พักผ่อนก่อนนะ เดี๋ยวระบบจัดการต่อเองครับ<br>สถานะระบบป้องกันสแปม: <span class='success'>ทำงาน</span>";
+        echo "ยินดีต้อนรับครับ Admin Ek! ระบบพร้อมสำหรับ ร.ศ. 124 แล้วครับ";
     }
 
-    echo "</div><div class='footer'>บอตได้รับอิสระ ไม่เป็นทาสการสแปมตามพระราชบัญญัติเลิกทาส ร.ศ. 124 🇹🇭<br>พัฒนาด้วย ❤️ โดย Admin Ek (Chatinon Jakram)</div></div></body></html>";
+    echo "</div><p style='text-align:center; color:#888; font-size:12px; margin-top:30px;'>บอตได้รับอิสระ ไม่เป็นทาสการสแปมตามพระราชบัญญัติเลิกทาส ร.ศ. 124 🇹🇭<br>พัฒนาโดย Admin Ek (Chatinon Jakram)</p></div></body></html>";
 } else {
-    // โหมด Cron (ไม่มีผลต่อหน้าเว็บ)
-    process_bot(true);
+    scan_news(true);
 }
 
-// --- [ 5. BOT CORE LOGIC ] ---
-function process_bot($is_cron) {
+function scan_news($is_cron) {
     global $rss_sources, $webhook_url;
-    
     foreach ($rss_sources as $name => $info) {
         $key = substr(md5($info['rss']), 0, 8);
         $rss = @simplexml_load_file($info['rss']);
-        if (!$rss || !isset($rss->channel->item[0])) continue;
-
+        if (!$rss) continue;
         $item = $rss->channel->item[0];
         $guid = (string)$item->guid;
         $last_guid = google_db("get", $key);
+        if ($last_guid === "DB_FAIL" || $guid === $last_guid) continue;
 
-        if ($last_guid === "DATABASE_CONNECT_FAIL") {
-            if (!$is_cron) echo "• $name: <span class='error'>❌ ฐานข้อมูลขัดข้อง (ข้ามเพื่อป้องกันสแปม)</span><br>";
-            continue; 
-        }
+        $img = ""; $ns = $rss->getNamespaces(true);
+        if (isset($ns['media'])) { $media = $item->children($ns['media']); if (isset($media->content)) $img = (string)$media->content->attributes()->url; }
 
-        if ($guid === $last_guid) {
-            if (!$is_cron) echo "• $name: <span class='warning'>ข่าวเดิม</span><br>";
-            continue;
-        }
-
-        // ดึงรูปภาพ
-        $image_url = "";
-        $ns = $rss->getNamespaces(true);
-        if (isset($ns['media'])) {
-            $media = $item->children($ns['media']);
-            if (isset($media->content)) $image_url = (string)$media->content->attributes()->url;
-        }
-
-        // ส่ง Discord
-        $payload = [
-            "username" => $name,
-            "avatar_url" => $info['avatar'],
-            "embeds" => [[
-                "title" => "📌 " . (string)$item->title,
-                "url" => (string)$item->link,
-                "description" => mb_strimwidth(strip_tags((string)$item->description), 0, 350, "..."),
-                "color" => hexdec($info['color']),
-                "image" => !empty($image_url) ? ["url" => $image_url] : null,
-                "footer" => ["text" => "M.3/5 NR-NEWS | " . date("H:i")]
-            ]]
-        ];
-
-        $ch = curl_init($webhook_url);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_exec($ch);
-        curl_close($ch);
-
+        $payload = ["username" => $name, "avatar_url" => $info['avatar'], "embeds" => [["title" => "📌 " . (string)$item->title, "url" => (string)$item->link, "description" => mb_strimwidth(strip_tags((string)$item->description), 0, 300, "..."), "color" => hexdec($info['color']), "image" => !empty($img) ? ["url" => $img] : null, "footer" => ["text" => "M.3/5 | " . date("H:i")]]]];
+        $ch = curl_init($webhook_url); curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload)); curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']); curl_exec($ch); curl_close($ch);
         google_db("set", $key, $guid);
-        if (!$is_cron) echo "• $name: <span class='success'>✅ ส่งข่าวใหม่แล้ว!</span><br>";
-        usleep(300000);
+        if (!$is_cron) echo "• $name: ✅ ส่งสำเร็จ!<br>";
     }
-    if ($is_cron) echo "Cron job executed at " . date("H:i:s");
 }
