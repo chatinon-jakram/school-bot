@@ -3,6 +3,8 @@
  * NR RSS BOT - Version: The Ultimate Freedom (ร.ศ. 124)
  * FULL CODE - NO MISSING PARTS
  */
+set_time_limit(0); 
+ignore_user_abort(true);
 
 error_reporting(E_ERROR | E_PARSE);
 date_default_timezone_set("Asia/Bangkok");
@@ -61,15 +63,20 @@ function process_bot($is_cron) {
 
         $item = $rss->channel->item[0];
         $guid = (string)$item->guid;
+
+        // หน่วงเวลา 1 วินาทีก่อนถาม Google Sheets เพื่อเลี่ยง 502
+        sleep(1); 
         $last_guid = google_db("get", $key);
 
         if ($last_guid === "DB_FAIL") {
             if (!$is_cron) echo "• $name: <span style='color:#fa3e3e;'>ฐานข้อมูลขัดข้อง (ข้าม)</span><br>";
+            flush();
             continue;
         }
 
         if ($guid === $last_guid) {
             if (!$is_cron) echo "• $name: ข่าวเดิม<br>";
+            flush();
             continue;
         }
 
@@ -98,10 +105,14 @@ function process_bot($is_cron) {
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         curl_exec($ch); curl_close($ch);
 
-        // บันทึกสถานะลง Sheets
+        // หน่วงเวลาอีก 1 วินาทีก่อนบันทึกลง Sheets
+        sleep(1); 
         google_db("set", $key, $guid);
-        if (!$is_cron) echo "• $name: <span style='color:#45bd62;'>✅ ส่งข่าวใหม่เรียบร้อย!</span><br>";
-        usleep(500000);
+
+        if (!$is_cron) {
+            echo "• $name: <span style='color:#45bd62;'>✅ ส่งข่าวใหม่เรียบร้อย!</span><br>";
+            flush(); // ดันข้อความออกหน้าจอทันที
+        }
     }
 }
 
@@ -124,29 +135,34 @@ if ($action !== 'cron'): ?>
     </style>
 </head>
 <body>
-    <div class="card">
-        <h1>🚀 NR-News Bot (M.3/5)</h1>
-        <div class="toolbar">
-            <a href="?action=run" class="btn btn-run">▶️ รันสแกนข่าว</a>
-            <a href="?action=check" class="btn btn-check">🔍 เช็คระบบเชื่อมต่อ</a>
-        </div>
-        <div class="log-box">
-            <?php
-            if ($action === 'check') {
-                $test = google_db("get", "ping_test");
-                echo ($test !== "DB_FAIL") ? "✅ เชื่อมต่อสำเร็จ! Google Sheets พร้อมใช้งานแล้ว" : "❌ เชื่อมต่อล้มเหลว! โปรดเช็ค URL GAS ในโค้ดว่าตรงกับเวอร์ชัน 3 หรือยัง";
-            } elseif ($action === 'run') {
-                process_bot(false);
-            } else {
-                echo "ยินดีต้อนรับครับเอิร์ก พักผ่อนนะครับ กฎหมายเลิกทาส ร.ศ. 124 คุ้มครองคุณอยู่ 🇹🇭";
-            }
-            ?>
-        </div>
-        <div class="footer">
-            พัฒนาโดย Admin Ek (Chatinon Jakram)<br>
-            บอตได้รับอิสระแล้ว และมันจะดูแลข่าวโรงเรียนให้คุณเอง
-        </div>
+   <div class="card">
+    <h1>🚀 NR-News Bot (M.3/5)</h1>
+    
+    <div class="toolbar">
+        <a href="?action=view" class="btn" style="background:#888;">🏠 หน้าแรก</a>
+        <a href="?action=run" class="btn btn-run">▶️ รันสแกนข่าว</a>
+        <a href="?action=check" class="btn btn-check">🔍 เช็คระบบเชื่อมต่อ</a>
     </div>
+
+    <div class="log-box">
+        <?php
+        if ($action === 'check') {
+            $test = google_db("get", "ping_test");
+            echo ($test !== "DB_FAIL") ? "✅ เชื่อมต่อสำเร็จ! Google Sheets พร้อมใช้งานแล้ว" : "❌ เชื่อมต่อล้มเหลว! โปรดเช็ค URL GAS ในโค้ดว่าตรงกับเวอร์ชัน 3 หรือยัง";
+        } elseif ($action === 'run') {
+            process_bot(false);
+        } else {
+            echo "ยินดีต้อนรับครับเอิร์ก พักผ่อนนะครับ ระบบได้รับอิสระแล้ว<br>";
+            echo "อ้างอิง: พระราชบัญญัติเลิกทาส ร.ศ. 124 โดยพระบาทสมเด็จพระจุลจอมเกล้าเจ้าอยู่หัว (รัชกาลที่ 5) 🇹🇭";
+        }
+        ?>
+    </div>
+
+    <div class="footer">
+        พัฒนาโดย Admin Ek (Chatinon Jakram)<br>
+        บอตได้รับอิสระตามพระราชปณิธานการเลิกทาส และมันจะดูแลข่าวโรงเรียนให้คุณเอง
+    </div>
+</div>
 </body>
 </html>
 <?php else:
